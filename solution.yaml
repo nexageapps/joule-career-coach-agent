@@ -1,0 +1,10 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: career-story-agent-8d8c6
+  version: "1.0.0"
+  description: AI agent that helps employees understand their career journey by turning their SAP SuccessFactors data into a personalised career story with strengths, skill gaps, and practical next steps.
+
+assets:
+  - ref: ./assets/career-story-agent/asset.yaml
