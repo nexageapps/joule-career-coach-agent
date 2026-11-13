@@ -1,0 +1,337 @@
+{
+  "servers": {
+    "career-data": {
+      "description": "Career data tools for the signed-in employee — profile, job info, skills, goals, performance reviews, learning, achievements, certifications. No compensation data exposed.",
+      "tools": {
+        "get_employee_profile": {
+          "description": "Retrieve the signed-in employee's public profile: name, title, department, location, hire date.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "userId": "100045",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "title": "Finance Analyst",
+            "department": "Finance",
+            "location": "New York",
+            "hireDate": "2021-06-14",
+            "managerId": "100001"
+          }
+        },
+        "get_job_info": {
+          "description": "Retrieve the signed-in employee's current job information: position, job department, business unit, cost center.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "userId": "100045",
+            "positionId": "FIN-ANL",
+            "positionTitle": "Finance Analyst",
+            "jobDepartment": "FIN",
+            "businessUnit": "DEMOCO",
+            "costCenter": "CC-210",
+            "employmentId": "EMP-100045",
+            "employmentType": "Regular",
+            "fte": 1.0,
+            "isContingentWorker": false,
+            "assignmentClass": "ST",
+            "startDate": "2021-06-14",
+            "originalHireDate": "2021-06-14",
+            "endDate": null,
+            "eventReason": "HIRNEW",
+            "managerId": "100001",
+            "managerName": "John Lee",
+            "managerTitle": "VP Finance",
+            "managerDepartment": "Finance",
+            "managerLocation": "New York",
+            "managerManagerId": "100000"
+          }
+        },
+        "list_work_experience": {
+          "description": "Retrieve internal work experience history for the signed-in employee.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "title": "Finance Analyst",
+                "department": "Finance",
+                "company": "DEMOCO",
+                "startDate": "2021-06-14",
+                "endDate": null
+              }
+            ]
+          }
+        },
+        "list_awards": {
+          "description": "Retrieve awards and recognition received by the signed-in employee.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": []
+          }
+        },
+        "list_badges": {
+          "description": "Retrieve digital badges and micro-credentials earned by the signed-in employee.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": []
+          }
+        },
+        "list_skills": {
+          "description": "Retrieve the signed-in employee's skills with proficiency levels.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "skillId": "SK-FIN-001",
+                "skillName": "Financial Analysis",
+                "proficiencyLevel": "Advanced",
+                "addedDate": "2021-06-14"
+              },
+              {
+                "skillId": "SK-FPA-001",
+                "skillName": "FP&A Modelling",
+                "proficiencyLevel": "Advanced",
+                "addedDate": "2022-04-01"
+              },
+              {
+                "skillId": "SK-SAC-001",
+                "skillName": "SAP Analytics Cloud",
+                "proficiencyLevel": "Intermediate",
+                "addedDate": "2025-11-03"
+              },
+              {
+                "skillId": "SK-DS-001",
+                "skillName": "Data Storytelling",
+                "proficiencyLevel": "Beginner",
+                "addedDate": "2026-05-12"
+              }
+            ]
+          }
+        },
+        "list_role_skills": {
+          "description": "Retrieve the skills required for the employee's current role to identify gaps.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": []
+          }
+        },
+        "list_goal_plans": {
+          "description": "Retrieve the signed-in employee's goal plan summary.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "planId": "GP-2025-2026",
+                "planName": "2025–2026 Goals",
+                "state": "In Progress",
+                "totalGoals": 3,
+                "completedGoals": 2
+              }
+            ]
+          }
+        },
+        "list_goals": {
+          "description": "Retrieve the signed-in employee's individual performance goals with status and progress.",
+          "input_schema": {"type": "object", "properties": {"planId": {"type": "string", "description": "Goal plan ID"}}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "goalId": "G-100045-1",
+                "name": "Automate monthly close reporting",
+                "category": "Business",
+                "status": "Completed",
+                "percentComplete": 100,
+                "startDate": "2025-09-01",
+                "dueDate": "2026-03-31",
+                "completedDate": "2026-03-20"
+              },
+              {
+                "goalId": "G-100045-2",
+                "name": "Earn SAP Analytics Cloud certification",
+                "category": "Development",
+                "status": "On Track",
+                "percentComplete": 60,
+                "startDate": "2026-02-02",
+                "dueDate": "2026-10-31",
+                "completedDate": null
+              },
+              {
+                "goalId": "G-100045-3",
+                "name": "Mentor a summer finance intern",
+                "category": "Development",
+                "status": "Completed",
+                "percentComplete": 100,
+                "startDate": "2026-06-01",
+                "dueDate": "2026-07-31",
+                "completedDate": "2026-07-28"
+              }
+            ]
+          }
+        },
+        "list_development_goals": {
+          "description": "Retrieve the signed-in employee's development goals from their Individual Development Plan.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": []
+          }
+        },
+        "get_performance_review": {
+          "description": "Retrieve the signed-in employee's most recent performance review narrative and manager feedback.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "reviewId": "PR-2025-100045",
+            "reviewType": "Annual Review",
+            "reviewPeriod": "2025",
+            "reviewedDate": "2026-01-15",
+            "rating": 4.0,
+            "overallRating": "Exceeds Expectations",
+            "reviewCount": 2,
+            "steps": [
+              {
+                "stepId": "S001",
+                "stepName": "Manager Review",
+                "status": "Completed",
+                "completedDate": "2026-01-15",
+                "comments": "Consistently reliable close ownership and a standout reporting automation project."
+              }
+            ],
+            "previousReviews": [
+              {
+                "reviewId": "PR-2024-100045",
+                "reviewType": "Annual Review",
+                "reviewPeriod": "2024",
+                "reviewedDate": "2025-01-21",
+                "rating": 3.5,
+                "overallRating": "Meets Expectations",
+                "summary": "Solid core delivery; ready to lead small automation initiatives."
+              }
+            ]
+          }
+        },
+        "list_certifications": {
+          "description": "Retrieve professional certifications completed or in progress by the signed-in employee.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "certId": "CERT-SAC-100045",
+                "name": "SAP Analytics Cloud",
+                "status": "In Progress",
+                "issuedBy": "SAP"
+              }
+            ]
+          }
+        },
+        "list_learning": {
+          "description": "Retrieve learning courses assigned or in progress for the signed-in employee.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "overdueFilter": {
+              "status": "overdue",
+              "count": 0,
+              "activities": [],
+              "source": "learning available with count 4"
+            },
+            "results": [
+              {
+                "learningId": "LMS-FIN-201",
+                "courseName": "Advanced FP&A Modelling",
+                "courseType": "Course",
+                "status": "Completed",
+                "completedDate": "2025-12-05"
+              },
+              {
+                "learningId": "LMS-SAC-110",
+                "courseName": "SAP Analytics Cloud for Finance",
+                "courseType": "Course",
+                "status": "Completed",
+                "completedDate": "2026-04-18"
+              },
+              {
+                "learningId": "LMS-LEAD-101",
+                "courseName": "Leading with Data",
+                "courseType": "Course",
+                "status": "In Progress",
+                "completedDate": null
+              },
+              {
+                "learningId": "LMS-COC-2026",
+                "courseName": "Code of Conduct 2026",
+                "courseType": "Course",
+                "status": "Completed",
+                "completedDate": "2026-09-14",
+                "dueDate": "2026-10-04",
+                "mandatory": true
+              }
+            ]
+          }
+        },
+        "list_achievements": {
+          "description": "Retrieve a combined summary of the employee's key achievements.",
+          "input_schema": {"type": "object", "properties": {}, "required": []},
+          "mock_response": {
+            "results": [
+              {
+                "achievementId": "ACH-100045-1",
+                "type": "Process Improvement",
+                "title": "Shortened the monthly close by three days",
+                "description": "Automated recurring close reports that the whole finance team now uses.",
+                "date": "2026-03-20"
+              },
+              {
+                "achievementId": "ACH-100045-2",
+                "type": "Innovation",
+                "title": "Built the rolling forecast dashboard",
+                "description": "Adopted by FP&A as the standard forecast view for quarterly planning.",
+                "date": "2025-11-30"
+              },
+              {
+                "achievementId": "ACH-100045-3",
+                "type": "Recognition",
+                "title": "Finance Rookie of the Year",
+                "description": "Recognized for ramping up on close ownership within the first year.",
+                "date": "2022-12-01"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "metadata": {
+    "version": "3.0.0",
+    "created_for_agent": "career-story-agent",
+    "mock_mode": true,
+    "deterministic": true,
+    "demo_employee": {
+      "userId": "100045",
+      "name": "Jane Smith",
+      "title": "Finance Analyst",
+      "department": "Finance",
+      "jobDepartment": "FIN",
+      "company": "DEMOCO",
+      "location": "New York",
+      "hireDate": "2021-06-14",
+      "originalHireDate": "2021-06-14",
+      "employmentId": "EMP-100045",
+      "positionId": "FIN-ANL",
+      "costCenter": "CC-210",
+      "eventReason": "HIRNEW",
+      "managerId": "100001",
+      "managerName": "John Lee",
+      "managerTitle": "VP Finance"
+    },
+    "sources": {
+      "profile": 1,
+      "job": 1,
+      "employment": 1,
+      "manager": 1,
+      "goals": 3,
+      "performanceReviews": 2,
+      "skills": 4,
+      "learning": 4,
+      "achievements": 3,
+      "certifications": 1
+    },
+    "total_servers": 1,
+    "total_tools": 14,
+    "note": "Single consolidated career-data server. All tools are read-only. Compensation data intentionally absent. Data reflects exact DEMOCO demo employee facts only — no invented metrics, awards, previous roles, or external certifications."
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "enabled": [
+    "correctness",
+    "groundedness",
+    "digression",
+    "memory"
+  ]
+}
