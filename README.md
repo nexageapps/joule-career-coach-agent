@@ -82,6 +82,10 @@ Deployment on SAP Build is currently blocked by a 5-minute pre-validation timeou
 2. Point the MCP provider at your own SuccessFactors MCP server, or keep the mock for preview.
 3. Run the tests, then preview before you deploy.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md).
+
 ## Licence
 
 [MIT](LICENSE). SAP, SuccessFactors and Joule are trademarks of SAP SE. This project is not affiliated with SAP.
