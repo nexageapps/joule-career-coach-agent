@@ -1,22 +1,30 @@
 <p align="center">
-  <img src="docs/images/logo.png" alt="Career Coach Agent logo" width="220">
+  <img src="docs/images/logo.png" alt="" width="160">
+</p>
+
+<h1 align="center">Career Coach Agent</h1>
+
+<p align="center">
+  SAP Joule Studio · SuccessFactors
 </p>
 
 <p align="center">
-  <img src="docs/images/banner.png" alt="Career Coach Agent. SAP Joule Studio and SuccessFactors." width="100%">
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT licence"></a>
-  <img src="https://img.shields.io/badge/SAP-Joule%20Studio-0a6ed1" alt="SAP Joule Studio">
-  <img src="https://img.shields.io/badge/SAP-SuccessFactors-0a6ed1" alt="SAP SuccessFactors">
+  <img src="https://img.shields.io/badge/Joule%20Studio-0a6ed1" alt="Joule Studio">
+  <img src="https://img.shields.io/badge/SuccessFactors-0a6ed1" alt="SuccessFactors">
   <img src="https://img.shields.io/badge/MCP-read--only-2ea44f" alt="MCP read-only">
+  <img src="https://img.shields.io/badge/SAP%20BTP-0a6ed1" alt="SAP BTP">
+  <img src="https://img.shields.io/badge/AI%20Agents-0a6ed1" alt="AI Agents">
+  <img src="https://img.shields.io/badge/Responsible%20AI-0a6ed1" alt="Responsible AI">
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT licence"></a>
   <img src="https://img.shields.io/badge/tests-215%20passed-2ea44f" alt="215 tests passed">
   <img src="https://img.shields.io/badge/deploy-open%20item-orange" alt="Deployment open item">
 </p>
 
 <p align="center">
-  A Joule Studio agent that turns an employee's own SuccessFactors record into a short career story: strengths, skill gaps, and two or three next steps.
+  A read-only agent that turns an employee's own SuccessFactors record into a short career story: strengths, skill gaps, and two or three next steps.
 </p>
 
 <p align="center">
