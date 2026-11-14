@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/images/logo.png" alt="Career Coach Agent logo" width="220">
+</p>
+
+<p align="center">
   <img src="docs/images/banner.png" alt="Career Coach Agent. SAP Joule Studio and SuccessFactors." width="100%">
 </p>
 
