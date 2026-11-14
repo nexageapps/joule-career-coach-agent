@@ -14,4 +14,4 @@ mcp==1.30.0
 sap-cloud-sdk==0.62.0
 google-re2==1.1.20251105
 PyYAML==6.0.3
-sqlalchemy==2.0.36
+sqlalchemy==2.1.8
