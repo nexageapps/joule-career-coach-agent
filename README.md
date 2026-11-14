@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/images/logo.png" alt="" width="160">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.png">
+    <img src="docs/images/logo.png" alt="" width="160">
+  </picture>
 </p>
 
 <h1 align="center">Career Coach Agent</h1>
