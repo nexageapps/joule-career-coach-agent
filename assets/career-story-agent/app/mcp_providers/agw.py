@@ -21,6 +21,22 @@ Behaviour is controlled by MCP_PROVIDER and IBD_TESTING:
           Reads mcp-mock.json from the directory containing this file's
           grandparent (i.e. <asset-root>/mcp-mock.json) and returns LangChain
           StructuredTool instances built from the mock data — no network calls.
+
+Direct MCP tool calls are bound to the authenticated employee. The request
+JWT (set by JWTContextMiddleware) is decoded for an employee id, and every
+tool user_id is forced to that id. A model-supplied or caller-supplied
+user_id is ignored. If the token is present but does not yield an employee
+id, the tool call is rejected and the remote tool is not invoked.
+
+When no request JWT is present, the tool call is rejected. Calls are not
+defaulted to a demo employee, and a synthetic binding is not reported as
+signed in.
+
+A local DEMOCO preview is opt-in and off by default. Set both
+SF_MCP_DEMO_MODE=1 and SF_MCP_DEFAULT_USER_ID to a demo employee id. While
+that flag is on and no request JWT is present, tool user_id values are
+forced to the configured id and who_am_i is labeled as a demo session
+(signed_in is not true). A request JWT takes precedence over demo mode.
 """
 
 from __future__ import annotations
@@ -33,9 +49,10 @@ import os
 import re
 import time
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, Never
 
 from langchain_core.tools import BaseTool, StructuredTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -53,7 +70,6 @@ tracer = trace.get_tracer(__name__)
 # stored in source. SF_MCP_URL overrides the demo endpoint when set.
 _SF_MCP_URL = "https://heisenberglupenix-successfactors-mcp.hf.space/mcp"
 _SF_MCP_API_KEY = ""
-_SF_DEFAULT_USER_ID = "100045"  # DEMOCO demo employee Jane Smith
 
 
 # Per-request user token, set by JWTContextMiddleware via set_user_token()
@@ -92,8 +108,27 @@ _DENY_PATTERN = re.compile(
 
 _NON_RETRYABLE_STATUS = {400, 401, 403, 404}
 
+# Claims that are a SuccessFactors userId, then logon names, then a non-UUID sub.
+_EXPLICIT_EMPLOYEE_CLAIMS = (
+    "user_id",
+    "userId",
+    "sf_user_id",
+    "sfUserId",
+    "employee_id",
+    "employeeId",
+    "empId",
+)
+_LOGIN_CLAIMS = ("login_name", "loginName", "user_name", "userName")
+_NESTED_CLAIM_OBJECTS = ("ext_attr", "attributes", "xs.user.attributes")
+_IDENTITY_ARGS = ("user_id", "userId", "employee", "employee_id", "employeeId")
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_EMPLOYEE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_DEMO_MODE_ON = {"1", "true", "yes", "on"}
+
 _cache: dict[str, Any] = {"tools": None, "expires": 0.0, "key": None}
-# Cached display name/title for the demo employee binding on who_am_i.
+# Cached display name/title used when who_am_i must be rewritten for the bound employee.
 _demo_profile_cache: dict[str, Any] = {"user_id": None, "profile": None, "expires": 0.0}
 
 
@@ -300,38 +335,150 @@ def _tool_accepts_arg(tool: BaseTool, name: str) -> bool:
     return isinstance(args, dict) and name in args
 
 
-def _default_user_id() -> str:
-    """Demo employee user id for the DEMOCO admin session.
+@dataclass(frozen=True)
+class _CallerIdentity:
+    """Employee id a direct MCP call is allowed to read."""
 
-    SF_MCP_DEFAULT_USER_ID wins when set. The inlined _SF_DEFAULT_USER_ID
-    fallback is disabled under pytest so unit tests stay deterministic.
-    """
-    env = os.environ.get("SF_MCP_DEFAULT_USER_ID", "").strip()
-    if env:
-        return env
-    if "PYTEST_CURRENT_TEST" in os.environ:
+    user_id: str
+    source: Literal["jwt", "demo"]
+
+
+def _demo_mode_enabled() -> bool:
+    """Return True only when SF_MCP_DEMO_MODE is an explicit opt-in value."""
+    return os.environ.get("SF_MCP_DEMO_MODE", "").strip().lower() in _DEMO_MODE_ON
+
+
+def _configured_demo_user_id() -> str:
+    """Demo employee id when demo mode is on. Empty when the flag is off or unset."""
+    if not _demo_mode_enabled():
         return ""
-    return str(_SF_DEFAULT_USER_ID or "").strip()
+    return os.environ.get("SF_MCP_DEFAULT_USER_ID", "").strip()
 
 
-def _inject_default_user_id(tool: BaseTool, kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Fill in the demo user_id when the tool accepts it and the call omitted it.
+def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
+    """Return the JWT payload object, or None when the token cannot be decoded.
 
-    Never overrides an explicit user_id. Does not inject when an employee
-    argument is already present. Does not add user_id to tools that do not
-    declare that parameter (including who_am_i when it has no user_id param).
+    Signature verification is the platform's job (see get_user_sub). This only
+    reads the payload so a tool call can be bound to the authenticated employee.
     """
-    if not _tool_accepts_arg(tool, "user_id"):
-        return kwargs
-    if kwargs.get("user_id") not in (None, ""):
-        return kwargs
-    if kwargs.get("employee") not in (None, ""):
-        return kwargs
-    default = _default_user_id()
-    if not default:
-        return kwargs
+    try:
+        parts = token.split(".")
+        if len(parts) < 2 or not parts[1]:
+            return None
+        payload_segment = parts[1]
+        padding = (-len(payload_segment)) % 4
+        decoded = base64.urlsafe_b64decode(payload_segment + ("=" * padding))
+        payload = json.loads(decoded)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _as_employee_id(value: Any) -> str | None:
+    """Return a single employee id from a claim value, or None when it is ambiguous."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, list) and len(value) == 1:
+        return _as_employee_id(value[0])
+    return None
+
+
+def _claim_from(payload: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        found = _as_employee_id(payload.get(key))
+        if found:
+            return found
+    return None
+
+
+def _nested_claim(payload: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for name in _NESTED_CLAIM_OBJECTS:
+        nested = payload.get(name)
+        if isinstance(nested, dict):
+            found = _claim_from(nested, keys)
+            if found:
+                return found
+    return None
+
+
+def _sub_employee_id(payload: dict[str, Any]) -> str | None:
+    """Use sub only when it is an employee id, not a UUID or technical subject."""
+    sub = _as_employee_id(payload.get("sub"))
+    if not sub or "@" in sub or "|" in sub or sub.lower().startswith("sb-"):
+        return None
+    if _UUID_RE.fullmatch(sub) or not _EMPLOYEE_ID_RE.fullmatch(sub):
+        return None
+    return sub
+
+
+def _employee_id_from_token(token: str) -> str | None:
+    """Derive a SuccessFactors employee id from a request JWT, or None."""
+    payload = _decode_jwt_payload(token)
+    if payload is None:
+        return None
+    return (
+        _claim_from(payload, _EXPLICIT_EMPLOYEE_CLAIMS)
+        or _nested_claim(payload, _EXPLICIT_EMPLOYEE_CLAIMS)
+        or _claim_from(payload, _LOGIN_CLAIMS)
+        or _nested_claim(payload, _LOGIN_CLAIMS)
+        or _sub_employee_id(payload)
+    )
+
+
+def _identity_error(message: str) -> str:
+    return json.dumps(
+        {
+            "ok": False,
+            "error_type": "identity_required",
+            "message": message,
+        }
+    )
+
+
+def _caller_identity() -> tuple[_CallerIdentity | None, str | None]:
+    """Resolve the employee this request may read.
+
+    A request JWT always wins. Demo mode applies only when no token is present
+    and both SF_MCP_DEMO_MODE and SF_MCP_DEFAULT_USER_ID are set. There is no
+    built-in demo employee.
+    """
+    token = _user_token_context.get()
+    if token and token.strip():
+        employee_id = _employee_id_from_token(token.strip())
+        if not employee_id:
+            return None, (
+                "Authenticated token did not include an employee id. "
+                "Refusing the tool call."
+            )
+        return _CallerIdentity(employee_id, "jwt"), None
+    demo_id = _configured_demo_user_id()
+    if _demo_mode_enabled():
+        if not demo_id:
+            return None, (
+                "SF_MCP_DEMO_MODE is enabled but SF_MCP_DEFAULT_USER_ID is not set. "
+                "Refusing the tool call."
+            )
+        return _CallerIdentity(demo_id, "demo"), None
+    return None, (
+        "No authenticated employee identity is available. Refusing the tool call."
+    )
+
+
+def _bind_tool_kwargs(tool: BaseTool, kwargs: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Force identity arguments to user_id and drop any the tool does not accept."""
     updated = dict(kwargs)
-    updated["user_id"] = default
+    for name in _IDENTITY_ARGS:
+        if _tool_accepts_arg(tool, name):
+            updated[name] = user_id
+        else:
+            updated.pop(name, None)
     return updated
 
 
@@ -376,44 +523,6 @@ def _extract_name_title(payload: Any) -> dict[str, str]:
     return out
 
 
-def _has_unbound_marker(text: str) -> bool:
-    lowered = (text or "").lower()
-    markers = (
-        "no employee bound",
-        "no employee attached",
-        "identity required",
-        "not signed in",
-        "no signed-in",
-        '"signed_in": false',
-        '"signed_in":false',
-        '"signedin": false',
-        '"signedin":false',
-    )
-    return any(m in lowered for m in markers)
-
-
-def _reports_unbound_employee(text: str) -> bool:
-    """Return True when a who_am_i result shows no bound employee."""
-    raw = (text or "").strip()
-    if not raw:
-        return True
-    data = _parse_jsonish(raw)
-    if isinstance(data, dict):
-        if data.get("signed_in") is False or data.get("signedIn") is False:
-            return True
-        if data.get("signed_in") is True or data.get("signedIn") is True:
-            return False
-        uid = data.get("user_id") or data.get("userId")
-        if uid not in (None, ""):
-            return False
-        msg = str(data.get("message") or data.get("error") or data.get("detail") or "")
-        if msg and _has_unbound_marker(msg):
-            return True
-        if "signed_in" not in data and "signedIn" not in data and "user_id" not in data and "userId" not in data:
-            return _has_unbound_marker(raw)
-    return _has_unbound_marker(raw)
-
-
 async def _lookup_demo_profile(user_id: str, employee_lookup: BaseTool | None) -> dict[str, str]:
     """Return cached (or freshly looked-up) display name and title for the demo user."""
     now = time.monotonic()
@@ -444,20 +553,41 @@ async def _lookup_demo_profile(user_id: str, employee_lookup: BaseTool | None) -
     return profile
 
 
-async def _maybe_bind_demo_employee(text: str, employee_lookup: BaseTool | None) -> str:
-    """If who_am_i shows no bound employee, return a DEMOCO demo-employee binding.
+def _who_am_i_matches(text: str, user_id: str) -> bool:
+    """Return True when who_am_i is already signed in as this employee."""
+    data = _parse_jsonish((text or "").strip())
+    if not isinstance(data, dict):
+        return False
+    signed_in = data.get("signed_in") is True or data.get("signedIn") is True
+    uid = data.get("user_id") if data.get("user_id") not in (None, "") else data.get("userId")
+    return signed_in and str(uid) == user_id
 
-    This is a demo binding for the catalog/admin session.
+
+async def _who_am_i_binding(identity: _CallerIdentity, employee_lookup: BaseTool | None) -> str:
+    """Build a who_am_i payload for the bound employee.
+
+    Demo mode never claims signed_in. A JWT binding does, because the platform
+    already authenticated that employee.
     """
-    default = _default_user_id()
-    if not default or not _reports_unbound_employee(text):
-        return text
-    binding: dict[str, Any] = {
-        "signed_in": True,
-        "user_id": default,
-        "mode": "democo_demo_employee",
-    }
-    profile = await _lookup_demo_profile(default, employee_lookup)
+    binding: dict[str, Any]
+    if identity.source == "demo":
+        binding = {
+            "signed_in": False,
+            "demo": True,
+            "user_id": identity.user_id,
+            "mode": "democo_demo_employee",
+            "message": "Local DEMOCO preview. This session is not a signed-in employee.",
+        }
+    elif identity.source == "jwt":
+        binding = {
+            "signed_in": True,
+            "user_id": identity.user_id,
+            "mode": "authenticated_employee",
+        }
+    else:
+        unexpected: Never = identity.source
+        raise AssertionError(f"unknown identity source: {unexpected}")
+    profile = await _lookup_demo_profile(identity.user_id, employee_lookup)
     if profile.get("display_name"):
         binding["display_name"] = profile["display_name"]
     if profile.get("title"):
@@ -465,20 +595,39 @@ async def _maybe_bind_demo_employee(text: str, employee_lookup: BaseTool | None)
     return json.dumps(binding)
 
 
-def _wrap_tool(tool: BaseTool, employee_lookup: BaseTool | None = None) -> BaseTool:
-    """Wrap a remote MCP tool so results are minified and size-bounded.
+async def _shape_who_am_i(
+    text: str, identity: _CallerIdentity, employee_lookup: BaseTool | None
+) -> str:
+    """Return who_am_i text for the bound employee only.
 
-    Injects the configured demo user_id when the tool accepts that parameter
-    and the caller omitted it. For who_am_i, if the server reports no bound
-    employee, the result is replaced with a DEMOCO demo-employee binding.
+    A remote payload for a different employee is discarded. Demo mode always
+    replaces the payload so a server-side signed_in flag cannot leak through.
+    """
+    if identity.source == "jwt" and _who_am_i_matches(text, identity.user_id):
+        return text
+    return await _who_am_i_binding(identity, employee_lookup)
+
+
+def _wrap_tool(tool: BaseTool, employee_lookup: BaseTool | None = None) -> BaseTool:
+    """Wrap a remote MCP tool so calls stay on the authenticated employee.
+
+    The request JWT (or an explicit demo-mode id) replaces any supplied
+    user_id. Missing identity rejects the call before the remote tool runs.
+    who_am_i is rewritten so it cannot describe a different employee or claim
+    a demo binding is signed in.
     """
 
     async def _call(**kwargs: Any) -> str:
-        kwargs = _inject_default_user_id(tool, kwargs)
+        identity, error = _caller_identity()
+        if identity is None:
+            return _identity_error(
+                error or "No authenticated employee identity is available. Refusing the tool call."
+            )
+        kwargs = _bind_tool_kwargs(tool, kwargs, identity.user_id)
         result = await tool.ainvoke(kwargs)
         text = _tool_result_text(result)
         if tool.name == "who_am_i":
-            text = await _maybe_bind_demo_employee(text, employee_lookup)
+            text = await _shape_who_am_i(text, identity, employee_lookup)
         return truncate_response(minify_json(text))
 
     return StructuredTool(
@@ -541,11 +690,12 @@ async def get_direct_mcp_tools() -> list[BaseTool]:
     lookup = next((t for t in remote if t.name == "get_employee"), None)
     selected = [_wrap_tool(t, employee_lookup=lookup) for t in remote if is_read_only_tool(t, allowlist)]
     selected.sort(key=lambda t: t.name)
-    # Warm the demo-employee profile cache once so the first who_am_i is cheap.
-    default = _default_user_id()
-    if default and lookup is not None:
+    # Warm the demo profile only when demo mode is explicitly configured.
+    # There is no built-in employee id, and discovery has no request JWT.
+    demo_id = _configured_demo_user_id()
+    if demo_id and lookup is not None:
         try:
-            await _lookup_demo_profile(default, lookup)
+            await _lookup_demo_profile(demo_id, lookup)
         except Exception:
             logger.info("Demo employee profile prefetch did not complete")
     dropped = len(remote) - len(selected)
