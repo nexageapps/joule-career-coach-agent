@@ -10,7 +10,7 @@ uvicorn==0.40.0
 httpx==0.28.1
 python-dotenv==1.2.4
 click==8.5.1
-mcp==1.29.0
+mcp==1.30.0
 sap-cloud-sdk==0.62.0
 google-re2==1.1.20251105
 PyYAML==6.0.3
